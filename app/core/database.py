@@ -1,6 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.orm import sessionmaker, DeclarativeBase, Mapped, mapped_column
+from fastapi import Depends
 import os
 
 # Configurar desde variables de entorno
@@ -20,4 +21,13 @@ async_engine = create_async_engine(
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-Base = declarative_base()
+class Base(DeclarativeBase):
+    pass
+
+def get_db():
+    """Dependencia para obtener sesión de BD."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
