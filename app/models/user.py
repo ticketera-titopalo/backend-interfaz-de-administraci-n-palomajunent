@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, String, DateTime, func
 from ..core.database import Base
+from passlib.hash import sha256_crypt
 
 class User(Base):
     __tablename__ = "users"
@@ -22,3 +23,11 @@ class User(Base):
             "is_active": self.is_active,
             "created_at": str(self.created_at) if self.created_at else None
         }
+    
+    def verify_password(self, plain_password):
+        """Verificar contraseña plain text contra hash."""
+        return sha256_crypt.verify(plain_password, self.password_hash)
+    
+    def get_hash_password(self, plain_password):
+        """Generar hash de contraseña."""
+        return sha256_crypt.hash(plain_password)
