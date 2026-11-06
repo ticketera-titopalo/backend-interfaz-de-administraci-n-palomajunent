@@ -23,3 +23,11 @@ class Concert(Base):
             "stock": self.stock,
             "created_at": str(self.created_at) if self.created_at else None
         }
+    
+    def tickets_disponibles(self):
+        """Retorna la cantidad de tickets aún disponibles."""
+        return self.stock
+    
+    def reducir_stock(self, cantidad):
+        """Reducir el stock en la cantidad especificada."""
+        self.stock = max(0, self.stock - cantidad)
