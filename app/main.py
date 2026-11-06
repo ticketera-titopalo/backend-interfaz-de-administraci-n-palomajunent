@@ -1,5 +1,6 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.routes.concerts import router as concerts_router
 from app.routes.users import router as users_router
@@ -22,6 +23,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Handler global para HTTPExceptions
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": {"type": exc.__class__.__name__},
+            "detail": exc.detail
+        }
+    )
 
 # Incluir routers de la API
 app.include_router(concerts_router)

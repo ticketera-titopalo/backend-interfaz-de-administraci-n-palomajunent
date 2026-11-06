@@ -1,16 +1,16 @@
 from datetime import timedelta
-from fastapi import APIRouter, HTTPException, status, Depends, Header
+from fastapi import APIRouter, HTTPException, status, Depends
 from sqlalchemy.orm import Session
 from ..core.database import get_db, engine, Base
 from ..models.user import User
 from ..core.security import verify_token_header, decode_token
-from pydantic import BaseModel as PydanticBaseModel
+from pydantic import BaseModel as PydanticBaseModel, EmailStr, Field, validator
 
 # Base.metadata.create_all(bind=engine)
 
 router = APIRouter(prefix="/api", tags=["users"])
 
-# Esquemas Pydantic
+# Esquemas Pydantic con validaciones
 class UserOut(PydanticBaseModel):
     id: int
     email: str
@@ -23,19 +23,21 @@ class UserOut(PydanticBaseModel):
         from_attributes = True
 
 class UserProfileUpdate(PydanticBaseModel):
-    full_name: str = None
-    email: str = None
+    full_name: str = Field(default=None, max_length=100, description="Nombre completo")
+    email: str = Field(default=None, max_length=255, description="Email")
+
+    @validator("email")
+    def email_valido(cls, v):
+        if v is not None:
+            import re
+            pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+            if not re.match(pattern, v):
+                raise ValueError("Formato de email inválido")
+        return v
 
 class UserPasswordChange(PydanticBaseModel):
-    old_password: str
-    new_password: str
-
-# Dependency opcional para token
-def get_token_header(authorization: str = Header(None)):
-    """Obtener header Authorization, opcional."""
-    if authorization is None:
-        return None
-    return verify_token_header(authorization)
+    old_password: str = Field(..., min_length=8, max_length=128, description="Contraseña actual")
+    new_password: str = Field(..., min_length=8, max_length=128, description="Contraseña nueva")
 
 # Endpoint para listar todos los usuarios (admin)
 @router.get("/", response_model=list[UserOut])
@@ -46,7 +48,7 @@ def list_users(db: Session = Depends(get_db)):
 
 # Endpoint: GET /api/users/me - Perfil del usuario autenticado
 @router.get("/me", response_model=UserOut)
-def get_my_profile(token: str = Depends(get_token_header), db: Session = Depends(get_db)):
+def get_my_profile(token: str = Depends(verify_token_header), db: Session = Depends(get_db)):
     """Perfil del usuario autenticado con JWT token."""
     if token is None:
         raise HTTPException(
@@ -84,7 +86,7 @@ def get_my_profile(token: str = Depends(get_token_header), db: Session = Depends
 
 # Endpoint: PUT /api/users/me - Editar perfil del usuario autenticado
 @router.put("/me", response_model=UserOut)
-def update_my_profile(data: UserProfileUpdate, token: str = Depends(get_token_header), db: Session = Depends(get_db)):
+def update_my_profile(data: UserProfileUpdate, token: str = Depends(verify_token_header), db: Session = Depends(get_db)):
     """Editar perfil del usuario autenticado."""
     if token is None:
         raise HTTPException(
@@ -139,7 +141,7 @@ def update_my_profile(data: UserProfileUpdate, token: str = Depends(get_token_he
 
 # Endpoint: POST /api/users/password - Cambiar contraseña
 @router.post("/password", response_model=dict)
-def change_password(data: UserPasswordChange, token: str = Depends(get_token_header), db: Session = Depends(get_db)):
+def change_password(data: UserPasswordChange, token: str = Depends(verify_token_header), db: Session = Depends(get_db)):
     """Cambiar contraseña del usuario autenticado."""
     if token is None:
         raise HTTPException(
