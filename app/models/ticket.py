@@ -1,5 +1,7 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, func
+from sqlalchemy import Column, Integer, Float, DateTime, String, func
 from ..core.database import Base
+from ..models.concert import Concert
+from ..models.user import User
 
 class Ticket(Base):
     __tablename__ = "tickets"
@@ -9,7 +11,12 @@ class Ticket(Base):
     user_id = Column(Integer, nullable=False)
     price_paid = Column(Float, nullable=False)
     purchased_at = Column(DateTime(timezone=True), server_default=func.now())
-    redeemed = Column(Integer, nullable=False, default=0)
+    redeemed = Column(Integer, nullable=False, default=0)  # 0 = no usado, 1 = usado en puerta
+    qr_code = Column(String(255), unique=True, nullable=False)
+    
+    # Relaciones
+    concert = None
+    user = None
     
     def to_dict(self):
         return {
@@ -18,5 +25,14 @@ class Ticket(Base):
             "user_id": self.user_id,
             "price_paid": self.price_paid,
             "purchased_at": str(self.purchased_at) if self.purchased_at else None,
-            "redeemed": self.redeemed
+            "redeemed": self.redeemed,
+            "qr_code": self.qr_code
         }
+    
+    @staticmethod
+    def generar_qr_code():
+        """Genera un código QR único (simulación con hash corto)."""
+        import hashlib
+        import time
+        data = f"{time.time()}{id(Ticket)}"
+        return hashlib.md5(data.encode()).hexdigest()[:12]
