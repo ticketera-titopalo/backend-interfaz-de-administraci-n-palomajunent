@@ -5,7 +5,7 @@ from ..models.concert import Concert
 from pydantic import BaseModel as PydanticBaseModel
 
 # Crear tablas al importar
-# Base.metadata.create_all(bind=engine)
+# # Base.metadata.create_all(bind=engine)
 
 router = APIRouter(prefix="/api/concerts", tags=["concerts"])
 
