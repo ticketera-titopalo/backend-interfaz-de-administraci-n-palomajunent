@@ -157,7 +157,71 @@ Criterios que hoy están en rojo y, para cada uno, una explicación breve de **c
 
 > **Tests (informativo):** hoy tenés **0** archivo(s) de test; la meta es **5**, pero **no** es una compuerta del semáforo. Para acercarte, agregá tests de los flujos principales (servicios y endpoints) y corré la suite con coverage.
 
-## 6. Anexo: dónde mirar
+## 6. Actividad en clase (miércoles y viernes)
+
+> Se consideran las **23 clases** del período (miércoles y viernes; Nov 4 y 6 quedan afuera porque el calendario las marca sin clase). `Commits` = commits de trabajo (no-merge); `Merges` = merges de PR (también son push). Los días sin actividad dicen **sin actividad**.
+
+### joaquin ardevol
+
+**9/23 clases con actividad** · 19 commits · 17 merges
+
+| Fecha | Marca | Repositorios | Commits / merges |
+|---|:--:|---|--:|
+| 2026-08-14 | No | sin actividad | 0 / 0 |
+| 2026-08-19 | **Sí** | frontend_interface-client-JoacoArdevol | 1 / 0 |
+| 2026-08-21 | **Sí** | frontend_interface-client-JoacoArdevol | 1 / 0 |
+| 2026-08-26 | No | sin actividad | 0 / 0 |
+| 2026-08-28 | No | sin actividad | 0 / 0 |
+| 2026-09-02 | **Sí** | frontend_interface-client-JoacoArdevol | 1 / 2 |
+| 2026-09-04 | No | sin actividad | 0 / 0 |
+| 2026-09-09 | No | sin actividad | 0 / 0 |
+| 2026-09-11 | No | sin actividad | 0 / 0 |
+| 2026-09-16 | No | sin actividad | 0 / 0 |
+| 2026-09-18 | No | sin actividad | 0 / 0 |
+| 2026-09-23 | No | sin actividad | 0 / 0 |
+| 2026-09-25 | No | sin actividad | 0 / 0 |
+| 2026-09-30 | **Sí** | frontend_interface-client-JoacoArdevol | 1 / 1 |
+| 2026-10-02 | No | sin actividad | 0 / 0 |
+| 2026-10-07 | No | sin actividad | 0 / 0 |
+| 2026-10-09 | No | sin actividad | 0 / 0 |
+| 2026-10-14 | No | sin actividad | 0 / 0 |
+| 2026-10-16 | **Sí** | frontend_interface-client-JoacoArdevol | 2 / 1 |
+| 2026-10-21 | **Sí** | frontend_interface-client-JoacoArdevol | 1 / 2 |
+| 2026-10-23 | **Sí** | frontend_interface-client-JoacoArdevol | 0 / 2 |
+| 2026-10-28 | **Sí** | frontend_interface-client-JoacoArdevol | 5 / 4 |
+| 2026-10-30 | **Sí** | frontend_interface-client-JoacoArdevol | 7 / 5 |
+
+### palojunent
+
+**12/23 clases con actividad** · 22 commits · 19 merges
+
+| Fecha | Marca | Repositorios | Commits / merges |
+|---|:--:|---|--:|
+| 2026-08-14 | No | sin actividad | 0 / 0 |
+| 2026-08-19 | **Sí** | backend-interfaz-de-cliente--palomaju-ent | 1 / 0 |
+| 2026-08-21 | No | sin actividad | 0 / 0 |
+| 2026-08-26 | No | sin actividad | 0 / 0 |
+| 2026-08-28 | No | sin actividad | 0 / 0 |
+| 2026-09-02 | **Sí** | backend-interfaz-de-cliente--palomaju-ent | 2 / 2 |
+| 2026-09-04 | **Sí** | backend-interfaz-de-cliente--palomaju-ent | 2 / 0 |
+| 2026-09-09 | **Sí** | backend-interfaz-de-cliente--palomaju-ent | 1 / 3 |
+| 2026-09-11 | No | sin actividad | 0 / 0 |
+| 2026-09-16 | No | sin actividad | 0 / 0 |
+| 2026-09-18 | No | sin actividad | 0 / 0 |
+| 2026-09-23 | No | sin actividad | 0 / 0 |
+| 2026-09-25 | No | sin actividad | 0 / 0 |
+| 2026-09-30 | **Sí** | backend-interfaz-de-cliente--palomaju-ent | 0 / 1 |
+| 2026-10-02 | No | sin actividad | 0 / 0 |
+| 2026-10-07 | **Sí** | backend-interfaz-de-cliente--palomaju-ent | 1 / 1 |
+| 2026-10-09 | **Sí** | backend-interfaz-de-cliente--palomaju-ent | 1 / 1 |
+| 2026-10-14 | **Sí** | backend-interfaz-de-cliente--palomaju-ent | 3 / 3 |
+| 2026-10-16 | **Sí** | backend-interfaz-de-cliente--palomaju-ent | 4 / 3 |
+| 2026-10-21 | No | sin actividad | 0 / 0 |
+| 2026-10-23 | **Sí** | backend-interfaz-de-cliente--palomaju-ent | 0 / 1 |
+| 2026-10-28 | **Sí** | backend-interfaz-de-cliente--palomaju-ent | 3 / 3 |
+| 2026-10-30 | **Sí** | backend-interfaz-de-administraci-n-palomajunent | 4 / 1 |
+
+## 7. Anexo: dónde mirar
 
 Archivos donde el análisis encontró cada señal en rojo (sin número de línea, a propósito):
 
