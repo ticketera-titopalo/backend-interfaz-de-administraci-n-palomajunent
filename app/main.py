@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routes.concerts import router as concerts_router
 from app.routes.users import router as users_router
 from app.routes.tickets import router as tickets_router
+from app.routes.auth import router as auth_router
 
 # Configurar CORS para el front cliente (Vue.js)
 app = FastAPI(
@@ -25,8 +26,9 @@ app.add_middleware(
 app.include_router(concerts_router)
 app.include_router(users_router)
 app.include_router(tickets_router)
+app.include_router(auth_router)
 
 @app.get("/api/health", tags=["health"])
 def health_check():
-    """Endpoint de salud de la API."""
+    """Endpoint de salud de la API (público, sin auth requerido)."""
     return {"status": "ok"}
