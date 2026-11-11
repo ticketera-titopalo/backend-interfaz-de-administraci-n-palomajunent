@@ -1,14 +1,39 @@
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends, Request
 from sqlalchemy.orm import Session
 from ..core.database import get_db, engine, Base
 from ..models.purchase import Purchase
 from ..models.concert import Concert
 from ..models.user import User
 from pydantic import BaseModel as PydanticBaseModel, Field, validator
+import time
 
-# # Base.metadata.create_all(bind=engine)
+# Constantes de rate limiting
+RATE_LIMIT_PURCHASES = 10  # 10 requests por hora por usuario
 
 router = APIRouter(prefix="/api", tags=["purchases"])
+
+# Almacenamiento para rate limiting de purchases
+purchase_rate_limit_storage = {}
+
+def check_purchase_rate_limit(user_id: int, limit: int, period: int) -> bool:
+    """Verificar límite de tasa para compras por usuario."""
+    now = time.time()
+    key = f"purchase_{user_id}"
+    
+    if key not in purchase_rate_limit_storage:
+        purchase_rate_limit_storage[key] = []
+    
+    # Limpiar entradas viejas
+    purchase_rate_limit_storage[key] = [t for t in purchase_rate_limit_storage[key] if now - t < period]
+    
+    if len(purchase_rate_limit_storage[key]) >= limit:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Máximo {limit} operaciones de compra por hora. Intente más tarde."
+        )
+    
+    purchase_rate_limit_storage[key].append(now)
+    return True
 
 # Esquemas Pydantic con validaciones
 class TicketSimpleOut(PydanticBaseModel):
@@ -70,10 +95,18 @@ class PurchaseDetailOut(PydanticBaseModel):
         from_attributes = True
 
 @router.post("/purchases", response_model=PurchaseOut, status_code=status.HTTP_201_CREATED)
-def create_purchase(purchase_data: PurchaseCreate, db: Session = Depends(get_db)):
+def create_purchase(purchase_data: PurchaseCreate, db: Session = Depends(get_db), request: Request = None):
     """Crear una nueva compra de entradas."""
     from ..models.concert import Concert as ConcertModel
     from ..models.user import User as UserModel
+    
+    # Rate limiting - 10 compras por hora por usuario
+    user_id = purchase_data.user_id
+    if not check_purchase_rate_limit(user_id, RATE_LIMIT_PURCHASES, 3600):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Máximo número de compras por hora alcanzado"
+        )
     
     # Validar que el concierto existe
     concert = db.query(ConcertModel).filter(ConcertModel.id == purchase_data.concert_id).first()
@@ -127,9 +160,35 @@ def create_purchase(purchase_data: PurchaseCreate, db: Session = Depends(get_db)
     return db_purchase.to_dict()
 
 @router.post("/purchases/emitir", response_model=list[TicketOut], status_code=status.HTTP_201_CREATED)
-def emitir_tickets(emitir: EmitirTicket, db: Session = Depends(get_db)):
+def emitir_tickets(emitir: EmitirTicket, db: Session = Depends(get_db), request: Request = None):
     """Emitir tickets tras una compra exitosa."""
     from jose import JWTError
+    
+    # Rate limiting - 10 emisiones por hora por usuario
+    # Obtener user_id desde el token (usaremos el purchase_id para identificar usuario)
+    purchase = db.query(Purchase).filter(Purchase.id == emitir.purchase_id).first()
+    if not purchase:
+        raise HTTPException(
+            status_code=404, 
+            detail="Compra no encontrada"
+        )
+    
+    user_id = purchase.user_id
+    now = time.time()
+    key = f"emit_{user_id}"
+    
+    if key not in purchase_rate_limit_storage:
+        purchase_rate_limit_storage[key] = []
+    
+    purchase_rate_limit_storage[key] = [t for t in purchase_rate_limit_storage[key] if now - t < 3600]
+    
+    if len(purchase_rate_limit_storage[key]) >= RATE_LIMIT_PURCHASES:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Máximo número de emisiones por hora alcanzado"
+        )
+    
+    purchase_rate_limit_storage[key].append(now)
     
     # Validar que la compra existe
     purchase = db.query(Purchase).filter(Purchase.id == emitir.purchase_id).first()
