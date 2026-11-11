@@ -15,7 +15,11 @@ from app.routes.tickets import router as tickets_router
 from app.routes.auth import router as auth_router
 from app.routes.purchases import router as purchases_router
 
-# Simple rate limiter en memoria (usar Redis en producción)
+# Rate limiter configuration
+# Using in-memory storage (use Redis in production for better performance)
+# RATE_LIMIT_LOGIN: 5 attempts per minute per IP
+# RATE_LIMIT_REFRESH: 3 attempts per hour per IP
+# RATE_LIMIT_PURCHASES: 10 requests per hour per user
 rate_limit_storage = {}
 RATE_LIMIT_LOGIN = 5  # 5 intentos por minuto
 RATE_LIMIT_REFRESH = 3  # 3 intentos por hora
@@ -48,12 +52,25 @@ async def add_security_headers(request, call_next):
 
 # Rate limiter helper
 def check_rate_limit(key, limit, period):
-    """Verificar límite de tasa para una clave dada."""
+    """Verificar límite de tasa para una clave dada.
+    
+    Args:
+        key: Identificador único para el límite (ej. IP, usuario ID).
+        limit: Número máximo de allowed requests.
+        period: Ventana de tiempo en segundos para el límite.
+    
+    Returns:
+        bool: True si el request está dentro del límite, False si se excedió.
+    
+    Note:
+        Este es un rate limiter simple en memoria. Para producción,
+        se recomienda usar Redis o una solución dedicada de rate limiting.
+    """
     now = time.time()
     if key not in rate_limit_storage:
         rate_limit_storage[key] = []
     
-    # Limpiar entradas viejas
+    # Limpiar entradas viejas fuera de la ventana de tiempo
     rate_limit_storage[key] = [t for t in rate_limit_storage[key] if now - t < period]
     
     if len(rate_limit_storage[key]) >= limit:
@@ -63,6 +80,15 @@ def check_rate_limit(key, limit, period):
     return True
 
 # Handler global para HTTPExceptions
+"""
+Handler personalizado para excepciones HTTP de FastAPI.
+
+Convierte todas las HTTPException en respuestas JSON consistentes
+con la estructura: {'error': {'type': 'ExceptionName'}, 'detail': 'mensaje'}.
+
+Esta handler asegura que todos los errores de la API tengan un formato
+estándar, facilitando el consumo por parte de front-ends y clientes API.
+"""
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request, exc):
     return JSONResponse(
@@ -82,5 +108,20 @@ app.include_router(purchases_router)
 
 @app.get("/api/health", tags=["health"])
 def health_check():
-    """Endpoint de salud de la API (público, sin auth requerido)."""
+    """Endpoint de salud de la API (público, sin auth requerido).
+    
+    Returns status 'ok' indicando que la API está operativa y conectada.
+    Este endpoint no requiere autenticación JWT y puede ser usado por:
+    - Sistemas de monitoreo (health checks)
+    - Load balancers para routing
+    - Verificación de disponibilidad del servicio
+    
+    Returns:
+        dict: {'status': 'ok'}
+    
+    Example:
+        >>> import requests
+        >>> r = requests.get('http://localhost:5001/api/health')
+        >>> r.json()  # {'status': 'ok'}
+    """
     return {"status": "ok"}
