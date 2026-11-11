@@ -19,7 +19,7 @@ def test_editar_perfil():
 
 def test_cambiar_password():
     """Test changing password."""
-    response = client.post("/api/users/password", json={"old_password": "123456", "new_password": "nueva123"})
+    response = client.post("/api/password", json={"old_password": "123456", "new_password": "nueva123"})
     assert response.status_code in [401, 400, 200]
 
 
@@ -31,5 +31,5 @@ def test_sin_token_perfil():
 
 def test_sin_token_password():
     """Test password change without token."""
-    response = client.post("/api/users/password", json={"old_password": "123456", "new_password": "nueva123"})
+    response = client.post("/api/password", json={"old_password": "123456", "new_password": "nueva123"})
     assert response.status_code in [401, 400, 200]
