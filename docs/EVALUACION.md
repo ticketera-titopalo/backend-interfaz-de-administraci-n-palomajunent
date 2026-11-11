@@ -11,11 +11,11 @@
 |---|---|
 | Tipo de proyecto | backend |
 | Índice de calidad de servicios | **50/100** (mínimo 50) |
-| Criterios cumplidos | **13/15** |
+| Criterios cumplidos | **12/15** |
 | Aprobado (semáforo) | **NO** |
-| Código (LOC) | 855 |
+| Código (LOC) | 1,069 |
 | Archivos de código | 12 |
-| Tests (archivos) | 0 |
+| Tests (archivos) | 5 |
 | Cobertura de líneas | no medible (mínimo 80%) |
 | Capas detectadas | presentacion, logica, datos |
 | Pushes directos a `main` (sin PR) | 0 |
@@ -27,7 +27,7 @@
 
 | Autor | Commits | Código (LOC) | Tests (LOC) | Docs (LOC) | Días activos | % del código |
 |---|---:|---:|---:|---:|---:|---:|
-| palojunent | 11 | 991 | 0 | 23 | 2 | 100% |
+| palojunent | 16 | 1,446 | 0 | 23 | 3 | 100% |
 
 > _El LOC de autoría lo calcula RepoSense sobre el historial y puede diferir del LOC de código del análisis de calidad (que mira solo el estado de `main`)._
 
@@ -37,7 +37,7 @@
 
 | Alumno | Sesiones | Cumplimiento | Pausa | Recencia | IC | Nivel | Para subir de nivel |
 |---|--:|--:|--:|--:|--:|--|--|
-| palojunent | 10 | 39% | 28 d | 64% | **34** | No aprueba | Cumplimiento 39% (mín. 50%) |
+| palojunent | 11 | 43% | 28 d | 100% | **42** | No aprueba | Cumplimiento 43% (mín. 50%) |
 
 > Para aprobar el IC: **2 sesiones por semana** sostenidas, sin pausas mayores a **10 días** y con actividad en las **últimas 2 semanas**. Se excluyen merges, bots y al docente. Zona horaria UTC-3.
 
@@ -55,7 +55,7 @@ Cada aspecto indica **qué mide**, **por qué importa** y **tu resultado**. Cuan
 
 - **Qué mide:** Porcentaje de bloques de código repetidos (similitud) en el repositorio.
 - **Por qué importa:** Cada copia se mantiene por separado: un arreglo hay que repetirlo y los defectos se multiplican.
-- **Tu resultado:** **20.1%** de duplicación _(máximo 15%)_
+- **Tu resultado:** **18.9%** de duplicación _(máximo 15%)_
 - **Para investigar la causa:**
     - ¿El trabajo se repartió por pantallas o archivos y se integró copiando y pegando bloques?
     - ¿Qué zonas del sistema cambiaron juntas más de una vez (señal de lógica compartida)?
@@ -109,11 +109,15 @@ Cada aspecto indica **qué mide**, **por qué importa** y **tu resultado**. Cuan
 - **Por qué importa:** Una unidad que cambia por motivos distintos es frágil y cuesta entenderla.
 - **Tu resultado:** **0** unidad(es) con baja cohesión _(máximo 0)_
 
-### 11. Complejidad alta (Compl) — OK
+### 11. Complejidad alta (Compl) — A REVISAR
 
 - **Qué mide:** Complejidad ciclomática: cantidad de caminos posibles dentro de una función (condicionales, bucles, casos).
 - **Por qué importa:** Muchos caminos = difícil de seguir y de probar; suelen esconderse casos sin cubrir.
-- **Tu resultado:** **4** bloque(s) de complejidad alta _(máximo 5 por 1000 LOC (tenés 855 LOC))_
+- **Tu resultado:** **7** bloque(s) de complejidad alta _(máximo 5 por 1000 LOC (tenés 1069 LOC))_
+- **Para investigar la causa:**
+    - ¿Se agregaron condiciones a medida que aparecían casos nuevos?
+    - ¿Se probaron todos los caminos o solo el caso principal?
+    - ¿Hay reglas de negocio mezcladas con detalles técnicos?
 
 ### 12. Funciones/métodos largos o con muchos parámetros (Tam) — OK
 
@@ -131,8 +135,8 @@ Cada aspecto indica **qué mide**, **por qué importa** y **tu resultado**. Cuan
 
 - **Qué mide:** Porcentaje de líneas de código ejecutadas por la suite de tests (cobertura real, no cantidad de archivos de test).
 - **Por qué importa:** Un test que existe pero no ejecuta el código no protege de nada: la cobertura muestra qué partes quedan sin verificar.
-- **Tu resultado:** **no medible** — sin tests en Python y `requirements.txt`/`pyproject.toml` _(mínimo 80% de líneas)_
-- **Causa detectada:** sin tests en Python y `requirements.txt`/`pyproject.toml`
+- **Tu resultado:** **no medible** — hay tests pero falta `requirements.txt`/`pyproject.toml` _(mínimo 80% de líneas)_
+- **Causa detectada:** hay tests pero falta `requirements.txt`/`pyproject.toml`
 - **Para investigar la causa:**
     - ¿Qué módulos o ramas del sistema nunca se ejecutan en los tests?
     - ¿Los tests prueban el camino principal y los errores, o solo el caso feliz?
@@ -150,20 +154,19 @@ Criterios que hoy están en rojo y, para cada uno, una explicación breve de **c
 
 | Criterio | Resultado actual | Meta | Brecha | Cómo alcanzarlo |
 |---|---|---|---|---|
-| Duplicación (DRY) (duplicacion) | **20.1%** de duplicación | máximo 15% | sobran 5.1 pts | Ubicá los bloques repetidos con `jscpd` o SonarQube, llevá la lógica común a una función o módulo compartido y hacé que todos lo usen. Cada copia eliminada baja el porcentaje; meta ≤15%. |
-| Cobertura de tests (Cob) | **no medible** — sin tests en Python y `requirements.txt`/`pyproject.toml` | mínimo 80% de líneas | no medible: generá el artefacto o corré la suite | Agregá una suite de tests (`tests/` o `test_*.py`) **y** un `requirements.txt`/`pyproject.toml`, y corré la suite con coverage. Meta: ≥80% de líneas. |
+| Duplicación (DRY) (duplicacion) | **18.9%** de duplicación | máximo 15% | sobran 3.9 pts | Ubicá los bloques repetidos con `jscpd` o SonarQube, llevá la lógica común a una función o módulo compartido y hacé que todos lo usen. Cada copia eliminada baja el porcentaje; meta ≤15%. |
+| Complejidad alta (Compl) | **7** bloque(s) de complejidad alta | máximo 5 por 1000 LOC (tenés 1069 LOC) | 7 hallazgo(s); el máximo para 1,069 LOC es 5.3 | Extraé condiciones y ramas a funciones con nombre propio, usá retornos tempranos y evitá anidar `if`/`switch`. Meta: ≤5 bloques por 1000 LOC. |
+| Cobertura de tests (Cob) | **no medible** — hay tests pero falta `requirements.txt`/`pyproject.toml` | mínimo 80% de líneas | no medible: generá el artefacto o corré la suite | Corregí el `requirements.txt`: dejá sólo las dependencias del proyecto (no un `pip freeze` del sistema) y volvé a medir. Después ampliá los tests hasta ≥80% de líneas. |
 
 > Empezá por las señales de seguridad (**SEC**, **SQL**) y por la **duplicación**: son las que más pesan en el índice y las más rápidas de verificar a ojo. Después de corregir, volvé a correr la medición: el semáforo se recalcula sobre `main`.
 
-> **Tests (informativo):** hoy tenés **0** archivo(s) de test; la meta es **5**, pero **no** es una compuerta del semáforo. Para acercarte, agregá tests de los flujos principales (servicios y endpoints) y corré la suite con coverage.
-
 ## 6. Actividad en clase (miércoles y viernes)
 
-> Se consideran las **23 clases** del período (miércoles y viernes, según `config/constancia.json`; feriados y semanas sin clase descontados). `Commits` = commits de trabajo (no-merge); `Merges` = merges de PR (también son push). Los días sin actividad dicen **sin actividad**.
+> Se consideran las **26 clases** del período (miércoles y viernes, según `config/constancia.json`; feriados y semanas sin clase descontados). `Commits` = commits de trabajo (no-merge); `Merges` = merges de PR (también son push). Los días sin actividad dicen **sin actividad**.
 
 ### joaquin ardevol
 
-**9/23 clases con actividad** · 19 commits · 17 merges
+**11/26 clases con actividad** · 29 commits · 28 merges
 
 | Fecha | Actividad | Repositorios | Commits / merges |
 |---|:--:|---|--:|
@@ -190,10 +193,13 @@ Criterios que hoy están en rojo y, para cada uno, una explicación breve de **c
 | 2026-10-23 | **Sí** | frontend_interface-client-JoacoArdevol | 0 / 2 |
 | 2026-10-28 | **Sí** | frontend_interface-client-JoacoArdevol | 5 / 4 |
 | 2026-10-30 | **Sí** | frontend_interface-client-JoacoArdevol | 7 / 5 |
+| 2026-11-04 | No | sin actividad | 0 / 0 |
+| 2026-11-06 | **Sí** | frontend_interface-client-JoacoArdevol | 1 / 3 |
+| 2026-11-11 | **Sí** | frontend-interface-administracion-joacoardevol | 9 / 8 |
 
 ### palojunent
 
-**12/23 clases con actividad** · 22 commits · 19 merges
+**14/26 clases con actividad** · 40 commits · 32 merges
 
 | Fecha | Actividad | Repositorios | Commits / merges |
 |---|:--:|---|--:|
@@ -220,10 +226,18 @@ Criterios que hoy están en rojo y, para cada uno, una explicación breve de **c
 | 2026-10-23 | **Sí** | backend-interfaz-de-cliente--palomaju-ent | 0 / 1 |
 | 2026-10-28 | **Sí** | backend-interfaz-de-cliente--palomaju-ent | 3 / 3 |
 | 2026-10-30 | **Sí** | backend-interfaz-de-administraci-n-palomajunent | 4 / 1 |
+| 2026-11-04 | No | sin actividad | 0 / 0 |
+| 2026-11-06 | **Sí** | backend-interfaz-de-administraci-n-palomajunent | 14 / 8 |
+| 2026-11-11 | **Sí** | backend-interfaz-de-administraci-n-palomajunent | 4 / 5 |
 
 ## 7. Anexo: dónde mirar
 
 Archivos donde el análisis encontró cada señal en rojo (sin número de línea, a propósito):
+
+**Complejidad alta (Compl)** — 3 archivo(s):
+- `app/routes/auth.py`
+- `app/routes/purchases.py`
+- `app/routes/users.py`
 
 ---
 _Informe generado por la cátedra. Los umbrales corresponden al perfil `exigente`. Ante dudas, revisá el archivo señalado y el criterio en `CRITERIOS-CALIDAD.md`._
