@@ -1,0 +1,56 @@
+services:
+  # Servicio de la aplicación FastAPI
+  app:
+    build: .
+    container_name: ticketera-admin
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URI=${DATABASE_URI}
+      - ALGORITHM=${ALGORITHM}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES}
+      - REFRESH_TOKEN_EXPIRE_DAYS=${REFRESH_TOKEN_EXPIRE_DAYS}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+
+  # Servicio de base de datos MySQL
+  db:
+    image: mysql:8.0
+    container_name: ticketera-db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ticketera_admin_db
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_USER: ticketera_admin
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Servicio de pgadmin opcional para gestión visual de BD
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: ticketera-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@ticketera.com
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+    ports:
+      - "5050:80"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db_data:
