@@ -28,8 +28,41 @@ RATE_LIMIT_PURCHASES = 10  # 10 requests por hora por usuario
 app = FastAPI(
     title="Ticketera - Admin API",
     version="1.0.0",
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
+    description="""
+    # Ticketera - Interfaz de Administración
+    
+    API REST para la gestión administrativa de la plataforma Ticketera.
+    
+    ## Características
+    - **Autenticación JWT** - Sistema de login/refresh/logout con tokens seguros
+    - **CRUD completo** - Conciertos, usuarios, tickets y compras
+    - **Validación de stock** - Control en tiempo real de disponibilidad
+    - **Emisión de tickets** - Generación de códigos QR únicos
+    - **Rate limiting** - Protección contra abusos de endpoints
+    - **Seguridad headers** - Headers HTTP para protección contra XSS, Clickjacking, etc.
+    
+    ## Authentication
+    La mayoría de los endpoints requieren autenticación JWT mediante header `Authorization: Bearer <token>`.
+    - Login: `POST /api/login` con email y contraseña
+    - Refresh token: `POST /api/refresh` para renovar tokens
+    - Logout: `POST /api/logout`
+    
+    ## Versioning
+    Versión actual: 1.0.0
+    """,
+    terms_of_service="https://ticketera.com/terms",
+    contact={
+        "name": "Ticketera Development Team",
+        "email": "dev@ticketera.com",
+    },
+    license_info={
+        "name": "MIT License",
+        "url": "https://opensource.org/licenses/MIT",
+    },
+    # Rutas personalizadas para documentación
+    openapi_url="/api/openapi.json",
+    docs_url="/api/docs",  # Swagger UI
+    redoc_url="/api/redoc",  # ReDoc
 )
 
 app.add_middleware(
