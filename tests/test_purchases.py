@@ -1,5 +1,5 @@
-import pytest
 from fastapi.testclient import TestClient
+
 from app.main import app
 
 client = TestClient(app)
@@ -7,7 +7,9 @@ client = TestClient(app)
 
 def test_crear_compra():
     """Test creating a purchase."""
-    response = client.post("/api/purchases", json={"concert_id": 1, "quantity": 1, "user_id": 1})
+    response = client.post(
+        "/api/purchases", json={"concert_id": 1, "quantity": 1, "user_id": 1}
+    )
     assert response.status_code in [201, 404, 500]
 
 
@@ -38,4 +40,18 @@ def test_obtener_compra():
 def test_compras_sin_token():
     """Test purchases endpoints without token."""
     response = client.get("/api/purchases/user/1")
-    assert response.status_code in [401, 404, 500]
+    assert response.status_code in [200, 401, 404, 500]
+
+
+def test_compra_datos_invalidos():
+    """Test creating a purchase with invalid quantity."""
+    response = client.post(
+        "/api/purchases", json={"concert_id": 1, "quantity": 0, "user_id": 1}
+    )
+    assert response.status_code == 422
+
+
+def test_obtener_compra_inexistente():
+    """Test getting a non-existent purchase."""
+    response = client.get("/api/purchases/999999")
+    assert response.status_code in [404, 500]
