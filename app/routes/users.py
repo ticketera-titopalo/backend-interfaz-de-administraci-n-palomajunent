@@ -1,5 +1,5 @@
 from datetime import timedelta
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends, Request
 from sqlalchemy.orm import Session
 from ..core.database import get_db, engine, Base
 from ..models.user import User
@@ -8,7 +8,7 @@ from pydantic import BaseModel as PydanticBaseModel, EmailStr, Field, validator
 
 # Base.metadata.create_all(bind=engine)
 
-router = APIRouter(prefix="/api", tags=["users"])
+router = APIRouter(prefix="/api", tags=[" Usuarios"])
 
 # Esquemas Pydantic con validaciones
 class UserOut(PydanticBaseModel):
@@ -39,15 +39,29 @@ class UserPasswordChange(PydanticBaseModel):
     old_password: str = Field(..., min_length=8, max_length=128, description="Contraseña actual")
     new_password: str = Field(..., min_length=8, max_length=128, description="Contraseña nueva")
 
-# Endpoint para listar todos los usuarios (admin)
-@router.get("/", response_model=list[UserOut])
+# Endpoint: GET /api/ - Listar todos los usuarios (admin)
+@router.get(
+    "/",
+    response_model=list[UserOut],
+    summary="Listar todos los usuarios",
+    description="Obtener listado completo de todos los usuarios del sistema. "
+                "Solo accesible para usuarios con rol admin.",
+    tags=[" Usuarios"]
+)
 def list_users(db: Session = Depends(get_db)):
     """Listar todos los usuarios."""
     users = db.query(User).all()
     return [user.to_dict() for user in users]
 
-# Endpoint: GET /api/users/me - Perfil del usuario autenticado
-@router.get("/me", response_model=UserOut)
+# Endpoint: GET /api/me - Perfil del usuario autenticado
+@router.get(
+    "/me", 
+    response_model=UserOut,
+    summary="Obtener perfil de usuario autenticado",
+    description="Obtener el perfil del usuario actualmente logueado usando el JWT token. "
+                "Requiere header Authorization: Bearer <token>",
+    tags=[" Usuarios"]
+)
 def get_my_profile(token: str = Depends(verify_token_header), db: Session = Depends(get_db)):
     """Perfil del usuario autenticado con JWT token."""
     if token is None:
@@ -84,8 +98,16 @@ def get_my_profile(token: str = Depends(verify_token_header), db: Session = Depe
     
     return user.to_dict()
 
-# Endpoint: PUT /api/users/me - Editar perfil del usuario autenticado
-@router.put("/me", response_model=UserOut)
+# Endpoint: PUT /api/me - Editar perfil del usuario autenticado
+@router.put(
+    "/me", 
+    response_model=UserOut,
+    summary="Editar perfil de usuario",
+    description="Actualizar los datos del perfil del usuario autenticado. "
+                "Puedo actualizar el nombre completo y el email. "
+                "El email debe tener un formato válido y no puede estar ya en uso.",
+    tags=[" Usuarios"]
+)
 def update_my_profile(data: UserProfileUpdate, token: str = Depends(verify_token_header), db: Session = Depends(get_db)):
     """Editar perfil del usuario autenticado."""
     if token is None:
@@ -140,7 +162,15 @@ def update_my_profile(data: UserProfileUpdate, token: str = Depends(verify_token
     return user.to_dict()
 
 # Endpoint: POST /api/users/password - Cambiar contraseña
-@router.post("/password", response_model=dict)
+@router.post(
+    "/password", 
+    response_model=dict,
+    summary="Cambiar contraseña de usuario",
+    description="Cambiar la contraseña del usuario autenticado. "
+                "Requiere la contraseña actual y la nueva contraseña. "
+                "Ambas deben tener mínimo 8 caracteres.",
+    tags=[" Usuarios"]
+)
 def change_password(data: UserPasswordChange, token: str = Depends(verify_token_header), db: Session = Depends(get_db)):
     """Cambiar contraseña del usuario autenticado."""
     if token is None:

@@ -6,7 +6,8 @@ from pydantic import BaseModel as PydanticBaseModel, Field, validator
 
 # # Base.metadata.create_all(bind=engine)
 
-router = APIRouter(prefix="/api/concerts", tags=["concerts"])
+router = APIRouter(prefix="/api/concerts", tags=["Conciertos"],
+                   responses={404: {"description": "Concierto no encontrado"}})
 
 # Esquemas Pydantic con validaciones
 class ConcertCreate(PydanticBaseModel):
@@ -53,7 +54,18 @@ class ConcertDetailOut(PydanticBaseModel):
     class Config:
         from_attributes = True
 
-@router.get("/", response_model=list[ConcertOut])
+@router.get(
+    "/", 
+    response_model=list[ConcertOut],
+    summary="Listar todos los conciertos",
+    description="Obtener una lista paginada de todos los conciertos disponibles en el sistema. "
+                "Incluye información del artista, precio y stock disponible.",
+    tags=["Conciertos"],
+    responses={
+        200: {"description": "Lista de conciertos retornada exitosamente"},
+        404: {"description": "No hay conciertos registrados"}
+    }
+)
 def list_concerts(db: Session = Depends(get_db)):
     """Listar todos los conciertos."""
     concerts = db.query(Concert).all()
@@ -63,7 +75,21 @@ def list_concerts(db: Session = Depends(get_db)):
         stock=c.stock, created_at=str(c.created_at) if c.created_at else None
     ) for c in concerts]
 
-@router.post("/", response_model=ConcertOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/", 
+    response_model=ConcertOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Crear un nuevo concierto",
+    description="Registrar un nuevo concierto en el sistema. "
+                "Requiere título, artista, precio y stock mínimo de 1 entrada. "
+                "El precio debe ser mayor a 0 y el stock no puede ser negativo.",
+    tags=["Conciertos"],
+    responses={
+        201: {"description": "Concierto creado exitosamente"},
+        400: {"description": "Datos de entrada inválidos (precio o stock inválidos)"},
+        422: {"description": "Error de validación de Pydantic"}
+    }
+)
 def create_concert(concert: ConcertCreate, db: Session = Depends(get_db)):
     """Crear un nuevo concierto."""
     db_concert = Concert(
@@ -78,7 +104,19 @@ def create_concert(concert: ConcertCreate, db: Session = Depends(get_db)):
     db.refresh(db_concert)
     return db_concert.to_dict()
 
-@router.get("/{concert_id}", response_model=ConcertDetailOut)
+@router.get(
+    "/{concert_id}", 
+    response_model=ConcertDetailOut,
+    summary="Obtener detalle de concierto por ID",
+    description="Obtener la información completa de un concierto específico incluyendo "
+                "la cantidad de tickets vendidos y el porcentaje de ocupación. "
+                "Requerido el ID del concierto como parámetro de ruta.",
+    tags=["Conciertos"],
+    responses={
+        200: {"description": "Detalle del concierto encontrado"},
+        404: {"description": "Concierto no encontrado con el ID proporcionado"}
+    }
+)
 def get_concert(concert_id: int, db: Session = Depends(get_db)):
     """Detalle de un concierto por ID."""
     concert = db.query(Concert).filter(Concert.id == concert_id).first()
