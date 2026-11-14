@@ -1,144 +1,142 @@
-from datetime import timedelta
-from fastapi import APIRouter, HTTPException, status, Depends, Request
-from sqlalchemy.orm import Session
-from ..core.database import get_db, engine, Base
-from ..models.user import User
-from ..core.security import create_access_token, create_refresh_token, decode_token, verify_token_header
-from pydantic import BaseModel as PydanticBaseModel
+"""Rutas y lógica de autenticación JWT y control de rate limiting."""
+
 import time
+from datetime import timedelta
 
-# Constantes de rate limiting
-RATE_LIMIT_LOGIN = 5  # 5 intentos por minuto
-RATE_LIMIT_REFRESH = 3  # 3 intentos por hora
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel as PydanticBaseModel
+from sqlalchemy.orm import Session
 
-# Base.metadata.create_all(bind=engine)
+from ..core.database import get_db
+from ..core.security import (create_access_token, create_refresh_token,
+                             decode_token)
+from ..models.user import User
+
+RATE_LIMIT_LOGIN = 5
+RATE_LIMIT_REFRESH = 3
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 router = APIRouter(prefix="/api", tags=["auth"])
+auth_rate_limit_storage: dict[str, list[float]] = {}
 
-# Esquemas Pydantic
+
 class LoginCredentials(PydanticBaseModel):
+    """Credenciales de entrada para inicio de sesión."""
+
     email: str
     password: str
 
+
 class TokenResponse(PydanticBaseModel):
+    """Respuesta estándar con par de tokens JWT."""
+
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
     expires_in: int
 
+
 class RefreshToken(PydanticBaseModel):
+    """Solicitud de renovación de token de acceso."""
+
     refresh_token: str
 
-# Rate limiter para endpoints de auth
-auth_rate_limit_storage = {}
 
-def check_auth_rate_limit(key: str, limit: int, period: float) -> bool:
-    """Verificar límite de tasa para endpoints de auth."""
-    now = time.time()
-    if key not in auth_rate_limit_storage:
-        auth_rate_limit_storage[key] = []
-    
-    # Limpiar entradas viejas
-    auth_rate_limit_storage[key] = [t for t in auth_rate_limit_storage[key] if now - t < period]
-    
-    if len(auth_rate_limit_storage[key]) >= limit:
+def check_auth_rate_limit(rate_key: str, limit: int, period_seconds: float) -> bool:
+    """Verifica y registra intentos por clave para prevenir fuerza bruta."""
+    current_time = time.time()
+    timestamps = auth_rate_limit_storage.get(rate_key, [])
+    valid_timestamps = [ts for ts in timestamps if current_time - ts < period_seconds]
+
+    if len(valid_timestamps) >= limit:
+        auth_rate_limit_storage[rate_key] = valid_timestamps
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Máximo {limit} intentos por {period/60} minutos. Intente más tarde.",
+            detail=f"Máximo {limit} intentos por {period_seconds / 60} minutos. Intente más tarde.",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    auth_rate_limit_storage[key].append(now)
+
+    valid_timestamps.append(current_time)
+    auth_rate_limit_storage[rate_key] = valid_timestamps
     return True
 
+
+def _build_token_pair(user: User) -> dict[str, str | int]:
+    """Genera un par nuevo de access_token y refresh_token para un usuario."""
+    access_token = create_access_token(
+        data={"sub": str(user.id), "email": user.email, "role": user.role},
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+    refresh_token_str = create_refresh_token(
+        data={"sub": str(user.id), "email": user.email},
+        expires_delta=timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
+    )
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token_str,
+        "token_type": "bearer",
+        "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    }
+
+
 @router.post("/login", response_model=TokenResponse, status_code=status.HTTP_200_OK)
-def login(credentials: LoginCredentials, db: Session = Depends(get_db), request: Request = None):
-    """Iniciar sesión y obtener tokens JWT."""
-    # Rate limiting para login - 5 intentos por minuto por IP
-    client_ip = request.client.host if request else "unknown"
-    rate_key = f"login_{client_ip}"
-    
-    if not check_auth_rate_limit(rate_key, RATE_LIMIT_LOGIN, 60):
-        raise HTTPException(status_code=429, detail="Demasiados intentos de login")
-    
+def login(
+    credentials: LoginCredentials,
+    db: Session = Depends(get_db),
+    request: Request = None,
+) -> dict[str, str | int]:
+    """Autentica al usuario con email y contraseña y emite tokens JWT."""
+    client_ip = request.client.host if request and request.client else "unknown"
+    check_auth_rate_limit(f"login_{client_ip}", RATE_LIMIT_LOGIN, 60)
+
     user = db.query(User).filter(User.email == credentials.email).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Credenciales incorrectas",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    if not user.verify_password(credentials.password):
+    if not user or not user.verify_password(credentials.password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciales incorrectas",
             headers={"WWW-Authenticate": "Bearer"},
         )
     if not user.is_active:
-        raise HTTPException(status_code=400, detail="Usuario inactivo")
-    
-    # Crear payload
-    access_expires = timedelta(minutes=30)
-    refresh_expires = timedelta(days=7)
-    
-    access_token = create_access_token(
-        data={"sub": str(user.id), "email": user.email, "role": user.role},
-        expires_delta=access_expires
-    )
-    refresh_token = create_refresh_token(
-        data={"sub": str(user.id), "email": user.email},
-        expires_delta=refresh_expires
-    )
-    
-    return {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "expires_in": int(ACCESS_TOKEN_EXPIRE_MINUTES * 60)
-    }
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Usuario inactivo"
+        )
+
+    return _build_token_pair(user)
+
 
 @router.post("/refresh", response_model=TokenResponse, status_code=status.HTTP_200_OK)
-def refresh_token(refresh: RefreshToken, db: Session = Depends(get_db), request: Request = None):
-    """Renovar token de acceso usando refresh token."""
-    # Rate limiting para refresh token - 3 intentos por hora por IP
-    client_ip = request.client.host if request else "unknown"
-    rate_key = f"refresh_{client_ip}"
-    
-    if not check_auth_rate_limit(rate_key, RATE_LIMIT_REFRESH, 3600):
-        raise HTTPException(status_code=429, detail="Demasiados intentos de refresh")
-    
-    payload = decode_token(refresh.refresh_token)
-    if payload is None or payload.get("type") != "refresh":
+def refresh_token(
+    refresh_payload: RefreshToken,
+    db: Session = Depends(get_db),
+    request: Request = None,
+) -> dict[str, str | int]:
+    """Renueva el par de tokens JWT a partir de un refresh_token válido."""
+    client_ip = request.client.host if request and request.client else "unknown"
+    check_auth_rate_limit(f"refresh_{client_ip}", RATE_LIMIT_REFRESH, 3600)
+
+    payload = decode_token(refresh_payload.refresh_token)
+    if (
+        payload is None
+        or payload.get("type") != "refresh"
+        or payload.get("sub") is None
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token de refresh inválido",
         )
-    
-    user_id = payload.get("sub")
-    user = db.query(User).filter(User.id == int(user_id)).first()
+
+    user = db.query(User).filter(User.id == int(payload["sub"])).first()
     if user is None or not user.is_active:
-        raise HTTPException(status_code=401, detail="Usuario no encontrado o inactivo")
-    
-    # Crear nuevos tokens
-    access_expires = timedelta(minutes=30)
-    refresh_expires = timedelta(days=7)
-    
-    new_access_token = create_access_token(
-        data={"sub": str(user.id), "email": user.email, "role": user.role},
-        expires_delta=access_expires
-    )
-    new_refresh_token = create_refresh_token(
-        data={"sub": str(user.id), "email": user.email},
-        expires_delta=refresh_expires
-    )
-    
-    return {
-        "access_token": new_access_token,
-        "refresh_token": new_refresh_token,
-        "expires_in": int(ACCESS_TOKEN_EXPIRE_MINUTES * 60)
-    }
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuario no encontrado o inactivo",
+        )
+
+    return _build_token_pair(user)
+
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-def logout():
-    """Cerrar sesión (en este ejemplo, solo retorna éxito)."""
-    # En un sistema real, aquí invalidaríamos el token en Redis o base de datos
+def logout() -> None:
+    """Cierra la sesión actual del cliente."""
     return None

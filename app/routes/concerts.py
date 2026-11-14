@@ -1,143 +1,136 @@
-from fastapi import APIRouter, HTTPException, status, Depends
+"""Rutas y esquemas para la gestión y consulta de conciertos."""
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel as PydanticBaseModel
+from pydantic import Field, validator
+from sqlalchemy import func
 from sqlalchemy.orm import Session
-from ..core.database import get_db, engine, Base
+
+from ..core.database import get_db
 from ..models.concert import Concert
-from pydantic import BaseModel as PydanticBaseModel, Field, validator
+from ..models.purchase import Purchase
 
-# # Base.metadata.create_all(bind=engine)
+router = APIRouter(
+    prefix="/api/concerts",
+    tags=["Conciertos"],
+    responses={404: {"description": "Concierto no encontrado"}},
+)
 
-router = APIRouter(prefix="/api/concerts", tags=["Conciertos"],
-                   responses={404: {"description": "Concierto no encontrado"}})
 
-# Esquemas Pydantic con validaciones
 class ConcertCreate(PydanticBaseModel):
+    """Esquema de validación para crear un nuevo concierto."""
+
     title: str = Field(..., max_length=255, description="Título del concierto")
     artist: str = Field(..., max_length=255, description="Artista o banda")
-    description: str = Field(default="", max_length=500, description="Descripción del concierto")
+    description: str = Field(
+        default="", max_length=500, description="Descripción del concierto"
+    )
     price: float = Field(..., gt=0, le=100000, description="Precio de la entrada")
     stock: int = Field(..., ge=0, le=10000, description="Stock disponible de entradas")
-    
+
     @validator("title")
-    def titulo_no_vacio(cls, v):
-        if not v.strip():
+    def validate_non_empty_title(cls, title_value: str) -> str:
+        """Verifica que el título no contenga únicamente espacios en blanco."""
+        if not title_value.strip():
             raise ValueError("El título no puede estar vacío")
-        return v
-    
+        return title_value
+
     @validator("artist")
-    def artista_no_vacio(cls, v):
-        if not v.strip():
+    def validate_non_empty_artist(cls, artist_value: str) -> str:
+        """Verifica que el artista no contenga únicamente espacios en blanco."""
+        if not artist_value.strip():
             raise ValueError("El nombre del artista no puede estar vacío")
-        return v
+        return artist_value
+
 
 class ConcertOut(PydanticBaseModel):
+    """Esquema de respuesta básica de un concierto."""
+
     id: int
     title: str
     artist: str
     description: str = ""
     price: float
     stock: int
-    created_at: str
-    
+    created_at: str | None = None
+
     class Config:
         from_attributes = True
 
-class ConcertDetailOut(PydanticBaseModel):
-    id: int
-    title: str
-    artist: str
-    description: str = ""
-    price: float
-    stock: int
+
+class ConcertDetailOut(ConcertOut):
+    """Esquema de respuesta detallada incluyendo métricas de venta."""
+
     tickets_vendidos: int
-    created_at: str
-    
-    class Config:
-        from_attributes = True
 
-@router.get(
-    "/", 
-    response_model=list[ConcertOut],
-    summary="Listar todos los conciertos",
-    description="Obtener una lista paginada de todos los conciertos disponibles en el sistema. "
-                "Incluye información del artista, precio y stock disponible.",
-    tags=["Conciertos"],
-    responses={
-        200: {"description": "Lista de conciertos retornada exitosamente"},
-        404: {"description": "No hay conciertos registrados"}
-    }
-)
-def list_concerts(db: Session = Depends(get_db)):
-    """Listar todos los conciertos."""
+
+@router.get("/", response_model=list[ConcertOut], summary="Listar todos los conciertos")
+def list_concerts(db: Session = Depends(get_db)) -> list[ConcertOut]:
+    """Obtiene todos los conciertos registrados en el sistema."""
     concerts = db.query(Concert).all()
-    return [ConcertOut(
-        id=c.id, title=c.title, artist=c.artist, 
-        description=c.description, price=c.price, 
-        stock=c.stock, created_at=str(c.created_at) if c.created_at else None
-    ) for c in concerts]
+    return [
+        ConcertOut(
+            id=concert.id,
+            title=concert.title,
+            artist=concert.artist,
+            description=concert.description or "",
+            price=concert.price,
+            stock=concert.stock,
+            created_at=str(concert.created_at) if concert.created_at else None,
+        )
+        for concert in concerts
+    ]
+
 
 @router.post(
-    "/", 
+    "/",
     response_model=ConcertOut,
     status_code=status.HTTP_201_CREATED,
     summary="Crear un nuevo concierto",
-    description="Registrar un nuevo concierto en el sistema. "
-                "Requiere título, artista, precio y stock mínimo de 1 entrada. "
-                "El precio debe ser mayor a 0 y el stock no puede ser negativo.",
-    tags=["Conciertos"],
-    responses={
-        201: {"description": "Concierto creado exitosamente"},
-        400: {"description": "Datos de entrada inválidos (precio o stock inválidos)"},
-        422: {"description": "Error de validación de Pydantic"}
-    }
 )
-def create_concert(concert: ConcertCreate, db: Session = Depends(get_db)):
-    """Crear un nuevo concierto."""
-    db_concert = Concert(
-        title=concert.title,
-        artist=concert.artist,
-        description=concert.description,
-        price=concert.price,
-        stock=concert.stock
+def create_concert(
+    concert_payload: ConcertCreate, db: Session = Depends(get_db)
+) -> dict:
+    """Registra un nuevo concierto con sus datos de precio y stock inicial."""
+    new_concert = Concert(
+        title=concert_payload.title,
+        artist=concert_payload.artist,
+        description=concert_payload.description,
+        price=concert_payload.price,
+        stock=concert_payload.stock,
     )
-    db.add(db_concert)
+    db.add(new_concert)
     db.commit()
-    db.refresh(db_concert)
-    return db_concert.to_dict()
+    db.refresh(new_concert)
+    return new_concert.to_dict()
+
 
 @router.get(
-    "/{concert_id}", 
+    "/{concert_id}",
     response_model=ConcertDetailOut,
     summary="Obtener detalle de concierto por ID",
-    description="Obtener la información completa de un concierto específico incluyendo "
-                "la cantidad de tickets vendidos y el porcentaje de ocupación. "
-                "Requerido el ID del concierto como parámetro de ruta.",
-    tags=["Conciertos"],
-    responses={
-        200: {"description": "Detalle del concierto encontrado"},
-        404: {"description": "Concierto no encontrado con el ID proporcionado"}
-    }
 )
-def get_concert(concert_id: int, db: Session = Depends(get_db)):
-    """Detalle de un concierto por ID."""
+def get_concert(concert_id: int, db: Session = Depends(get_db)) -> ConcertDetailOut:
+    """Obtiene el detalle de un concierto y suma sus entradas vendidas mediante agregación SQL."""
     concert = db.query(Concert).filter(Concert.id == concert_id).first()
     if not concert:
         raise HTTPException(
-            status_code=404, 
-            detail="Concierto no encontrado"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Concierto no encontrado"
         )
-    # Calcular tickets vendidos total desde purchases
-    tickets_vendidos = 0
-    all_purchases = db.query(Purchase).filter(Purchase.concert_id == concert_id).all()
-    for p in all_purchases:
-        tickets_vendidos += p.quantity
-    
+
+    sold_tickets = (
+        db.query(func.coalesce(func.sum(Purchase.quantity), 0))
+        .filter(Purchase.concert_id == concert_id)
+        .scalar()
+    )
+
     return ConcertDetailOut(
         id=concert.id,
         title=concert.title,
         artist=concert.artist,
-        description=concert.description,
+        description=concert.description or "",
         price=concert.price,
         stock=concert.stock,
-        tickets_vendidos=tickets_vendidos,
-        created_at=str(concert.created_at) if concert.created_at else None
+        tickets_vendidos=int(sold_tickets),
+        created_at=str(concert.created_at) if concert.created_at else None,
     )
