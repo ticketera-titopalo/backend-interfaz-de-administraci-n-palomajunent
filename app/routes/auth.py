@@ -1,6 +1,5 @@
 """Rutas y lógica de autenticación JWT y control de rate limiting."""
 
-import time
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -8,8 +7,8 @@ from pydantic import BaseModel as PydanticBaseModel
 from sqlalchemy.orm import Session
 
 from ..core.database import get_db
-from ..core.security import (create_access_token, create_refresh_token,
-                             decode_token)
+from ..core.dependencies import check_rate_limit, get_active_user_by_id
+from ..core.security import create_access_token, create_refresh_token, decode_token
 from ..models.user import User
 
 RATE_LIMIT_LOGIN = 5
@@ -18,7 +17,6 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 router = APIRouter(prefix="/api", tags=["auth"])
-auth_rate_limit_storage: dict[str, list[float]] = {}
 
 
 class LoginCredentials(PydanticBaseModel):
@@ -43,23 +41,9 @@ class RefreshToken(PydanticBaseModel):
     refresh_token: str
 
 
-def check_auth_rate_limit(rate_key: str, limit: int, period_seconds: float) -> bool:
-    """Verifica y registra intentos por clave para prevenir fuerza bruta."""
-    current_time = time.time()
-    timestamps = auth_rate_limit_storage.get(rate_key, [])
-    valid_timestamps = [ts for ts in timestamps if current_time - ts < period_seconds]
-
-    if len(valid_timestamps) >= limit:
-        auth_rate_limit_storage[rate_key] = valid_timestamps
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Máximo {limit} intentos por {period_seconds / 60} minutos. Intente más tarde.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    valid_timestamps.append(current_time)
-    auth_rate_limit_storage[rate_key] = valid_timestamps
-    return True
+def _get_client_ip(request: Request | None) -> str:
+    """Obtiene la dirección IP del cliente desde el objeto Request."""
+    return request.client.host if request and request.client else "unknown"
 
 
 def _build_token_pair(user: User) -> dict[str, str | int]:
@@ -87,8 +71,13 @@ def login(
     request: Request = None,
 ) -> dict[str, str | int]:
     """Autentica al usuario con email y contraseña y emite tokens JWT."""
-    client_ip = request.client.host if request and request.client else "unknown"
-    check_auth_rate_limit(f"login_{client_ip}", RATE_LIMIT_LOGIN, 60)
+    check_rate_limit(
+        f"login_{_get_client_ip(request)}",
+        RATE_LIMIT_LOGIN,
+        60,
+        f"Máximo {RATE_LIMIT_LOGIN} intentos por 1.0 minutos. Intente más tarde.",
+        include_auth_header=True,
+    )
 
     user = db.query(User).filter(User.email == credentials.email).first()
     if not user or not user.verify_password(credentials.password):
@@ -112,8 +101,13 @@ def refresh_token(
     request: Request = None,
 ) -> dict[str, str | int]:
     """Renueva el par de tokens JWT a partir de un refresh_token válido."""
-    client_ip = request.client.host if request and request.client else "unknown"
-    check_auth_rate_limit(f"refresh_{client_ip}", RATE_LIMIT_REFRESH, 3600)
+    check_rate_limit(
+        f"refresh_{_get_client_ip(request)}",
+        RATE_LIMIT_REFRESH,
+        3600,
+        f"Máximo {RATE_LIMIT_REFRESH} intentos por 60.0 minutos. Intente más tarde.",
+        include_auth_header=True,
+    )
 
     payload = decode_token(refresh_payload.refresh_token)
     if (
@@ -126,13 +120,7 @@ def refresh_token(
             detail="Token de refresh inválido",
         )
 
-    user = db.query(User).filter(User.id == int(payload["sub"])).first()
-    if user is None or not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Usuario no encontrado o inactivo",
-        )
-
+    user = get_active_user_by_id(db, int(payload["sub"]), unauthorized_on_missing=True)
     return _build_token_pair(user)
 
 
