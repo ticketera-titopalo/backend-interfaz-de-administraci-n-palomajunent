@@ -8,7 +8,7 @@ from pydantic import Field, validator
 from sqlalchemy.orm import Session
 
 from ..core.database import get_db
-from ..core.security import decode_token, verify_token_header
+from ..core.dependencies import get_current_active_user
 from ..models.user import User
 
 router = APIRouter(prefix="/api", tags=["Usuarios"])
@@ -57,47 +57,6 @@ class UserPasswordChange(PydanticBaseModel):
     )
 
 
-def _get_authenticated_active_user(token: str | None, db: Session) -> User:
-    """Decodifica el token JWT y retorna el usuario activo correspondiente.
-
-    Args:
-        token: Token JWT extraído del encabezado Authorization.
-        db: Sesión activa de base de datos.
-
-    Returns:
-        User: Instancia del modelo User autenticado y activo.
-
-    Raises:
-        HTTPException: Si el token es inválido/expirado o el usuario no existe/está inactivo.
-    """
-    if token is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token requerido",
-        )
-
-    payload = decode_token(token)
-    if payload is None or payload.get("sub") is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token inválido o expirado",
-        )
-
-    user_id = int(payload["sub"])
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Usuario no encontrado",
-        )
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Usuario inactivo",
-        )
-    return user
-
-
 def _update_user_email(db: Session, user: User, new_email: str) -> None:
     """Verifica disponibilidad del nuevo correo electrónico y lo asigna al usuario."""
     if new_email == user.email:
@@ -115,30 +74,26 @@ def _update_user_email(db: Session, user: User, new_email: str) -> None:
 @router.get("/", response_model=list[UserOut], summary="Listar todos los usuarios")
 def list_users(db: Session = Depends(get_db)) -> list[dict]:
     """Obtiene el listado completo de usuarios registrados en el sistema."""
-    users = db.query(User).all()
-    return [user.to_dict() for user in users]
+    return [user.to_dict() for user in db.query(User).all()]
 
 
 @router.get(
     "/me", response_model=UserOut, summary="Obtener perfil de usuario autenticado"
 )
 def get_my_profile(
-    token: str = Depends(verify_token_header),
-    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ) -> dict:
     """Retorna los datos del perfil del usuario autenticado mediante JWT."""
-    current_user = _get_authenticated_active_user(token, db)
     return current_user.to_dict()
 
 
 @router.put("/me", response_model=UserOut, summary="Editar perfil de usuario")
 def update_my_profile(
     profile_payload: UserProfileUpdate | None = None,
-    token: str = Depends(verify_token_header),
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> dict:
     """Actualiza el nombre completo y/o correo electrónico del usuario autenticado."""
-    current_user = _get_authenticated_active_user(token, db)
     if profile_payload is None:
         return current_user.to_dict()
 
@@ -156,11 +111,10 @@ def update_my_profile(
 @router.post("/password", response_model=dict, summary="Cambiar contraseña de usuario")
 def change_password(
     password_payload: UserPasswordChange | None = None,
-    token: str = Depends(verify_token_header),
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
     """Valida la contraseña actual y actualiza el hash con la nueva contraseña."""
-    current_user = _get_authenticated_active_user(token, db)
     if password_payload is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
