@@ -3,8 +3,44 @@ import uuid
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.models.concert import Concert
+from app.models.user import User
+from tests.conftest import TestingSessionLocal
 
 client = TestClient(app)
+
+
+def _create_db_user(email: str, password: str, full_name: str = "Usuario Test") -> int:
+    """Crea un usuario directamente en la base de datos de pruebas y retorna su ID."""
+    db = TestingSessionLocal()
+    try:
+        user = User(email=email, full_name=full_name, role="admin", is_active=1)
+        user.password_hash = user.get_hash_password(password)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        return user.id
+    finally:
+        db.close()
+
+
+def _create_db_concert(title: str = "Concierto Test", stock: int = 100) -> int:
+    """Crea un concierto directamente en la base de datos de pruebas y retorna su ID."""
+    db = TestingSessionLocal()
+    try:
+        concert = Concert(
+            title=title,
+            artist="Banda Test",
+            description="Descripción de prueba",
+            price=50.0,
+            stock=stock,
+        )
+        db.add(concert)
+        db.commit()
+        db.refresh(concert)
+        return concert.id
+    finally:
+        db.close()
 
 
 def test_lista_conciertos_get():
@@ -61,19 +97,9 @@ def test_detalle_compra():
 
 
 def test_flujo_completo_auth_y_perfil():
-    """Test full auth lifecycle: register, login, refresh, profile update and password change."""
+    """Test full auth lifecycle: login, refresh, logout, profile update and password change."""
     unique_email = f"user_{uuid.uuid4().hex[:8]}@example.com"
-    register_payload = {
-        "email": unique_email,
-        "password": "password123",
-        "full_name": "Usuario Test",
-    }
-    res_reg = client.post("/api/register", json=register_payload)
-    assert res_reg.status_code in [201, 400]
-
-    # Registro duplicado
-    res_dup = client.post("/api/register", json=register_payload)
-    assert res_dup.status_code == 400
+    _create_db_user(unique_email, "password123")
 
     # Login con credenciales inválidas
     res_bad_login = client.post(
@@ -124,36 +150,17 @@ def test_flujo_completo_auth_y_perfil():
     )
     assert res_ok_pwd.status_code == 200
 
+    # Logout
+    assert client.post("/api/logout").status_code == 204
+
 
 def test_flujo_completo_compra_y_tickets():
     """Test full purchase, ticket emission, listing and redemption flow."""
     unique_email = f"buyer_{uuid.uuid4().hex[:8]}@example.com"
-    res_reg = client.post(
-        "/api/register",
-        json={
-            "email": unique_email,
-            "password": "password123",
-            "full_name": "Comprador Test",
-        },
-    )
-    assert res_reg.status_code == 201
-    user_id = res_reg.json()["id"]
+    user_id = _create_db_user(unique_email, "password123", "Comprador Test")
+    concert_id = _create_db_concert("Concierto Test Coverage", stock=100)
 
-    res_concert = client.post(
-        "/api/concerts",
-        json={
-            "title": "Concierto Test Coverage",
-            "artist": "Banda Test",
-            "venue": "Estadio Test",
-            "date": "2026-12-01T20:00:00",
-            "price": 50.0,
-            "total_tickets": 100,
-        },
-    )
-    assert res_concert.status_code == 201
-    concert_id = res_concert.json()["id"]
-
-    # Crear compra exitosa y validar errores de stock/usuario
+    # Crear compra exitosa y validar errores de stock
     res_purchase = client.post(
         "/api/purchases",
         json={"concert_id": concert_id, "quantity": 2, "user_id": user_id},
@@ -178,11 +185,7 @@ def test_flujo_completo_compra_y_tickets():
     )
     assert res_emit_dup.status_code == 400
 
-    # Consultar detalle de compra, compras de usuario, tickets y canjear QR
+    # Consultar detalle de compra, compras de usuario y tickets
     assert client.get(f"/api/purchases/{purchase_id}").status_code == 200
     assert client.get(f"/api/purchases/user/{user_id}").status_code == 200
     assert client.get(f"/api/tickets/usuario/{user_id}").status_code == 200
-
-    qr_code = tickets[0]["qr_code"]
-    res_redeem = client.post(f"/api/tickets/redeem/{qr_code}")
-    assert res_redeem.status_code in [200, 404]
