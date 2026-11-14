@@ -1,13 +1,16 @@
 """Rutas, esquemas y lógica de negocio para compras y emisión de tickets."""
 
-import time
-
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel as PydanticBaseModel
 from pydantic import Field
 from sqlalchemy.orm import Session
 
 from ..core.database import get_db
+from ..core.dependencies import (
+    check_rate_limit,
+    get_active_user_by_id,
+    get_entity_or_404,
+)
 from ..models.concert import Concert
 from ..models.purchase import Purchase
 from ..models.ticket import Ticket
@@ -17,31 +20,6 @@ RATE_LIMIT_PURCHASES = 10
 RATE_LIMIT_WINDOW_SECONDS = 3600
 
 router = APIRouter(prefix="/api", tags=["purchases"])
-purchase_rate_limit_storage: dict[str, list[float]] = {}
-
-
-def check_operation_rate_limit(
-    rate_key: str,
-    limit: int = RATE_LIMIT_PURCHASES,
-    period_seconds: int = RATE_LIMIT_WINDOW_SECONDS,
-    error_detail: str | None = None,
-) -> bool:
-    """Verifica el límite de operaciones por ventana de tiempo para un usuario."""
-    current_time = time.time()
-    timestamps = purchase_rate_limit_storage.get(rate_key, [])
-    valid_timestamps = [ts for ts in timestamps if current_time - ts < period_seconds]
-
-    if len(valid_timestamps) >= limit:
-        purchase_rate_limit_storage[rate_key] = valid_timestamps
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=error_detail
-            or f"Máximo {limit} operaciones de compra por hora. Intente más tarde.",
-        )
-
-    valid_timestamps.append(current_time)
-    purchase_rate_limit_storage[rate_key] = valid_timestamps
-    return True
 
 
 class TicketSimpleOut(PydanticBaseModel):
@@ -109,27 +87,42 @@ class PurchaseDetailOut(PurchaseOut):
     tickets: list[TicketSimpleOut] = []
 
 
+def _build_ticket_out(ticket: Ticket) -> TicketOut:
+    """Serializa una instancia de Ticket al esquema TicketOut."""
+    return TicketOut(
+        id=ticket.id,
+        concert_id=ticket.concert_id,
+        user_id=ticket.user_id,
+        price_paid=ticket.price_paid,
+        purchased_at=str(ticket.purchased_at) if ticket.purchased_at else None,
+        redeemed=ticket.redeemed,
+        qr_code=ticket.qr_code,
+    )
+
+
+def _build_purchase_detail_out(purchase: Purchase) -> PurchaseDetailOut:
+    """Serializa una instancia de Purchase al esquema detallado PurchaseDetailOut."""
+    return PurchaseDetailOut(
+        id=purchase.id,
+        user_id=purchase.user_id,
+        concert_id=purchase.concert_id,
+        quantity=purchase.quantity,
+        total_price=purchase.total_price,
+        status=purchase.status,
+        purchased_at=str(purchase.purchased_at) if purchase.purchased_at else None,
+        redeemed=purchase.redeemed,
+        tickets=purchase.get_tickets(),
+    )
+
+
 def _validate_purchase_entities(
     db: Session, purchase_payload: PurchaseCreate
-) -> tuple[Concert, User]:
+) -> Concert:
     """Valida existencia de concierto, usuario activo y disponibilidad de stock."""
-    concert = (
-        db.query(Concert).filter(Concert.id == purchase_payload.concert_id).first()
+    concert = get_entity_or_404(
+        db, Concert, purchase_payload.concert_id, "Concierto no encontrado"
     )
-    if not concert:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Concierto no encontrado"
-        )
-
-    user = db.query(User).filter(User.id == purchase_payload.user_id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado"
-        )
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Usuario inactivo"
-        )
+    get_active_user_by_id(db, purchase_payload.user_id)
 
     available_stock = concert.tickets_disponibles()
     if purchase_payload.quantity > available_stock:
@@ -140,96 +133,78 @@ def _validate_purchase_entities(
                 f"Solicitado: {purchase_payload.quantity}"
             ),
         )
+    return concert
 
-    return concert, user
 
-
-def _validate_and_get_emission_context(
-    db: Session, purchase_id: int
-) -> tuple[Purchase, Concert, User]:
-    """Valida la compra, rate-limit, emisión previa y entidades relacionadas."""
-    purchase = db.query(Purchase).filter(Purchase.id == purchase_id).first()
-    if not purchase:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Compra no encontrada"
-        )
-
-    check_operation_rate_limit(
-        f"emit_{purchase.user_id}",
-        error_detail="Máximo número de emisiones por hora alcanzado",
-    )
-
-    existing_ticket = (
-        db.query(Ticket).filter(Ticket.concert_id == purchase.concert_id).first()
-    )
-    if existing_ticket:
+def _ensure_not_already_emitted(db: Session, concert_id: int) -> None:
+    """Verifica que no existan tickets emitidos previamente para el concierto."""
+    if db.query(Ticket.id).filter(Ticket.concert_id == concert_id).first():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Tickets ya emitidos para esta compra",
         )
 
-    concert = db.query(Concert).filter(Concert.id == purchase.concert_id).first()
-    user = db.query(User).filter(User.id == purchase.user_id).first()
-    if not concert:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Concierto no encontrado"
-        )
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado"
-        )
 
-    return purchase, concert, user
+def _validate_and_get_emission_context(
+    db: Session, purchase_id: int
+) -> tuple[Purchase, Concert]:
+    """Valida la compra, rate-limit, emisión previa y entidades relacionadas."""
+    purchase = get_entity_or_404(db, Purchase, purchase_id, "Compra no encontrada")
+    check_rate_limit(
+        f"emit_{purchase.user_id}",
+        RATE_LIMIT_PURCHASES,
+        RATE_LIMIT_WINDOW_SECONDS,
+        "Máximo número de emisiones por hora alcanzado",
+    )
+    _ensure_not_already_emitted(db, purchase.concert_id)
+
+    concert = get_entity_or_404(
+        db, Concert, purchase.concert_id, "Concierto no encontrado"
+    )
+    get_entity_or_404(db, User, purchase.user_id, "Usuario no encontrado")
+    return purchase, concert
 
 
-def _generate_unique_tickets(
-    db: Session, purchase: Purchase, concert: Concert
-) -> list[TicketOut]:
-    """Genera en lote los tickets con códigos QR únicos evitando consultas N+1."""
-    candidate_codes: set[str] = set()
-    while len(candidate_codes) < purchase.quantity:
-        candidate_codes.add(Ticket.generar_qr_code())
+def _generate_unique_qr_codes(db: Session, quantity: int) -> set[str]:
+    """Genera un conjunto de códigos QR únicos garantizando que no existan en BD."""
+    unique_codes: set[str] = set()
+    while len(unique_codes) < quantity:
+        batch = {Ticket.generar_qr_code() for _ in range(quantity - len(unique_codes))}
+        existing = {
+            row[0]
+            for row in db.query(Ticket.qr_code).filter(Ticket.qr_code.in_(batch)).all()
+        }
+        unique_codes.update(batch - existing)
+    return unique_codes
 
-    existing_codes = {
-        row[0]
-        for row in db.query(Ticket.qr_code)
-        .filter(Ticket.qr_code.in_(candidate_codes))
-        .all()
-    }
-    candidate_codes -= existing_codes
 
-    while len(candidate_codes) < purchase.quantity:
-        new_code = Ticket.generar_qr_code()
-        if not db.query(Ticket.id).filter(Ticket.qr_code == new_code).first():
-            candidate_codes.add(new_code)
-
-    created_tickets: list[Ticket] = []
-    for qr_code in candidate_codes:
-        ticket = Ticket(
+def _persist_tickets(
+    db: Session, purchase: Purchase, concert: Concert, qr_codes: set[str]
+) -> list[Ticket]:
+    """Crea, guarda en lote y refresca los objetos Ticket en la base de datos."""
+    created_tickets = [
+        Ticket(
             concert_id=purchase.concert_id,
             user_id=purchase.user_id,
             price_paid=concert.price,
             qr_code=qr_code,
         )
-        db.add(ticket)
-        created_tickets.append(ticket)
-
+        for qr_code in qr_codes
+    ]
+    db.add_all(created_tickets)
     db.commit()
     for ticket in created_tickets:
         db.refresh(ticket)
+    return created_tickets
 
-    return [
-        TicketOut(
-            id=ticket.id,
-            concert_id=ticket.concert_id,
-            user_id=ticket.user_id,
-            price_paid=ticket.price_paid,
-            purchased_at=str(ticket.purchased_at) if ticket.purchased_at else None,
-            redeemed=ticket.redeemed,
-            qr_code=ticket.qr_code,
-        )
-        for ticket in created_tickets
-    ]
+
+def _generate_unique_tickets(
+    db: Session, purchase: Purchase, concert: Concert
+) -> list[TicketOut]:
+    """Genera y serializa en lote los tickets con códigos QR únicos."""
+    qr_codes = _generate_unique_qr_codes(db, purchase.quantity)
+    created_tickets = _persist_tickets(db, purchase, concert, qr_codes)
+    return [_build_ticket_out(ticket) for ticket in created_tickets]
 
 
 @router.post(
@@ -241,19 +216,19 @@ def create_purchase(
     request: Request = None,
 ) -> dict:
     """Crea una nueva compra de entradas validando stock y descontando disponibilidad."""
-    check_operation_rate_limit(
+    check_rate_limit(
         f"purchase_{purchase_payload.user_id}",
-        error_detail="Máximo número de compras por hora alcanzado",
+        RATE_LIMIT_PURCHASES,
+        RATE_LIMIT_WINDOW_SECONDS,
+        "Máximo número de compras por hora alcanzado",
     )
 
-    concert, _ = _validate_purchase_entities(db, purchase_payload)
-    total_price = round(concert.price * purchase_payload.quantity, 2)
-
+    concert = _validate_purchase_entities(db, purchase_payload)
     new_purchase = Purchase(
         user_id=purchase_payload.user_id,
         concert_id=purchase_payload.concert_id,
         quantity=purchase_payload.quantity,
-        total_price=total_price,
+        total_price=round(concert.price * purchase_payload.quantity, 2),
         status="completed",
     )
     concert.reducir_stock(purchase_payload.quantity)
@@ -275,9 +250,7 @@ def emitir_tickets(
     request: Request = None,
 ) -> list[TicketOut]:
     """Genera y emite los tickets individuales correspondientes a una compra."""
-    purchase, concert, _ = _validate_and_get_emission_context(
-        db, emit_payload.purchase_id
-    )
+    purchase, concert = _validate_and_get_emission_context(db, emit_payload.purchase_id)
     return _generate_unique_tickets(db, purchase, concert)
 
 
@@ -287,18 +260,7 @@ def list_tickets_by_user(
 ) -> list[TicketOut]:
     """Obtiene todos los tickets asociados a un usuario."""
     tickets = db.query(Ticket).filter(Ticket.user_id == user_id).all()
-    return [
-        TicketOut(
-            id=ticket.id,
-            concert_id=ticket.concert_id,
-            user_id=ticket.user_id,
-            price_paid=ticket.price_paid,
-            purchased_at=str(ticket.purchased_at) if ticket.purchased_at else None,
-            redeemed=ticket.redeemed,
-            qr_code=ticket.qr_code,
-        )
-        for ticket in tickets
-    ]
+    return [_build_ticket_out(ticket) for ticket in tickets]
 
 
 @router.get("/purchases/user/{user_id}", response_model=list[PurchaseDetailOut])
@@ -307,20 +269,7 @@ def list_purchases_by_user(
 ) -> list[PurchaseDetailOut]:
     """Retorna el historial de compras de un usuario."""
     purchases = db.query(Purchase).filter(Purchase.user_id == user_id).all()
-    return [
-        PurchaseDetailOut(
-            id=purchase.id,
-            user_id=purchase.user_id,
-            concert_id=purchase.concert_id,
-            quantity=purchase.quantity,
-            total_price=purchase.total_price,
-            status=purchase.status,
-            purchased_at=str(purchase.purchased_at) if purchase.purchased_at else None,
-            redeemed=purchase.redeemed,
-            tickets=purchase.get_tickets(),
-        )
-        for purchase in purchases
-    ]
+    return [_build_purchase_detail_out(purchase) for purchase in purchases]
 
 
 @router.get("/purchases/{purchase_id}", response_model=PurchaseDetailOut)
@@ -328,20 +277,5 @@ def get_purchase_detail(
     purchase_id: int, db: Session = Depends(get_db)
 ) -> PurchaseDetailOut:
     """Obtiene el detalle completo de una compra y sus tickets asociados."""
-    purchase = db.query(Purchase).filter(Purchase.id == purchase_id).first()
-    if not purchase:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Compra no encontrada"
-        )
-
-    return PurchaseDetailOut(
-        id=purchase.id,
-        user_id=purchase.user_id,
-        concert_id=purchase.concert_id,
-        quantity=purchase.quantity,
-        total_price=purchase.total_price,
-        status=purchase.status,
-        purchased_at=str(purchase.purchased_at) if purchase.purchased_at else None,
-        redeemed=purchase.redeemed,
-        tickets=purchase.get_tickets(),
-    )
+    purchase = get_entity_or_404(db, Purchase, purchase_id, "Compra no encontrada")
+    return _build_purchase_detail_out(purchase)
