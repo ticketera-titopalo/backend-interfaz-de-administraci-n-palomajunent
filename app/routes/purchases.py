@@ -136,24 +136,27 @@ def _validate_purchase_entities(
     return concert
 
 
+def _ensure_not_already_emitted(db: Session, concert_id: int) -> None:
+    """Verifica que no existan tickets emitidos previamente para el concierto."""
+    if db.query(Ticket.id).filter(Ticket.concert_id == concert_id).first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tickets ya emitidos para esta compra",
+        )
+
+
 def _validate_and_get_emission_context(
     db: Session, purchase_id: int
 ) -> tuple[Purchase, Concert]:
     """Valida la compra, rate-limit, emisión previa y entidades relacionadas."""
     purchase = get_entity_or_404(db, Purchase, purchase_id, "Compra no encontrada")
-
     check_rate_limit(
         f"emit_{purchase.user_id}",
         RATE_LIMIT_PURCHASES,
         RATE_LIMIT_WINDOW_SECONDS,
         "Máximo número de emisiones por hora alcanzado",
     )
-
-    if db.query(Ticket).filter(Ticket.concert_id == purchase.concert_id).first():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Tickets ya emitidos para esta compra",
-        )
+    _ensure_not_already_emitted(db, purchase.concert_id)
 
     concert = get_entity_or_404(
         db, Concert, purchase.concert_id, "Concierto no encontrado"
@@ -162,42 +165,45 @@ def _validate_and_get_emission_context(
     return purchase, concert
 
 
-def _generate_unique_tickets(
-    db: Session, purchase: Purchase, concert: Concert
-) -> list[TicketOut]:
-    """Genera en lote los tickets con códigos QR únicos evitando consultas N+1."""
-    candidate_codes: set[str] = set()
-    while len(candidate_codes) < purchase.quantity:
-        candidate_codes.add(Ticket.generar_qr_code())
+def _generate_unique_qr_codes(db: Session, quantity: int) -> set[str]:
+    """Genera un conjunto de códigos QR únicos garantizando que no existan en BD."""
+    unique_codes: set[str] = set()
+    while len(unique_codes) < quantity:
+        batch = {Ticket.generar_qr_code() for _ in range(quantity - len(unique_codes))}
+        existing = {
+            row[0]
+            for row in db.query(Ticket.qr_code).filter(Ticket.qr_code.in_(batch)).all()
+        }
+        unique_codes.update(batch - existing)
+    return unique_codes
 
-    existing_codes = {
-        row[0]
-        for row in db.query(Ticket.qr_code)
-        .filter(Ticket.qr_code.in_(candidate_codes))
-        .all()
-    }
-    candidate_codes -= existing_codes
 
-    while len(candidate_codes) < purchase.quantity:
-        new_code = Ticket.generar_qr_code()
-        if not db.query(Ticket.id).filter(Ticket.qr_code == new_code).first():
-            candidate_codes.add(new_code)
-
-    created_tickets: list[Ticket] = []
-    for qr_code in candidate_codes:
-        ticket = Ticket(
+def _persist_tickets(
+    db: Session, purchase: Purchase, concert: Concert, qr_codes: set[str]
+) -> list[Ticket]:
+    """Crea, guarda en lote y refresca los objetos Ticket en la base de datos."""
+    created_tickets = [
+        Ticket(
             concert_id=purchase.concert_id,
             user_id=purchase.user_id,
             price_paid=concert.price,
             qr_code=qr_code,
         )
-        db.add(ticket)
-        created_tickets.append(ticket)
-
+        for qr_code in qr_codes
+    ]
+    db.add_all(created_tickets)
     db.commit()
     for ticket in created_tickets:
         db.refresh(ticket)
+    return created_tickets
 
+
+def _generate_unique_tickets(
+    db: Session, purchase: Purchase, concert: Concert
+) -> list[TicketOut]:
+    """Genera y serializa en lote los tickets con códigos QR únicos."""
+    qr_codes = _generate_unique_qr_codes(db, purchase.quantity)
+    created_tickets = _persist_tickets(db, purchase, concert, qr_codes)
     return [_build_ticket_out(ticket) for ticket in created_tickets]
 
 

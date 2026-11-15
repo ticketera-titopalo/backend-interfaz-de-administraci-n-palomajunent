@@ -64,6 +64,33 @@ def _build_token_pair(user: User) -> dict[str, str | int]:
     }
 
 
+def _authenticate_user(db: Session, email: str, password: str) -> User:
+    """Valida email, contraseña y estado activo del usuario."""
+    user = db.query(User).filter(User.email == email).first()
+    if not user or not user.verify_password(password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciales incorrectas",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Usuario inactivo"
+        )
+    return user
+
+
+def _extract_refresh_user_id(raw_token: str) -> int:
+    """Decodifica el refresh token y valida que contenga un subject válido."""
+    payload = decode_token(raw_token)
+    if not payload or payload.get("type") != "refresh" or not payload.get("sub"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token de refresh inválido",
+        )
+    return int(payload["sub"])
+
+
 @router.post("/login", response_model=TokenResponse, status_code=status.HTTP_200_OK)
 def login(
     credentials: LoginCredentials,
@@ -78,19 +105,7 @@ def login(
         f"Máximo {RATE_LIMIT_LOGIN} intentos por 1.0 minutos. Intente más tarde.",
         include_auth_header=True,
     )
-
-    user = db.query(User).filter(User.email == credentials.email).first()
-    if not user or not user.verify_password(credentials.password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Credenciales incorrectas",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Usuario inactivo"
-        )
-
+    user = _authenticate_user(db, credentials.email, credentials.password)
     return _build_token_pair(user)
 
 
@@ -108,19 +123,8 @@ def refresh_token(
         f"Máximo {RATE_LIMIT_REFRESH} intentos por 60.0 minutos. Intente más tarde.",
         include_auth_header=True,
     )
-
-    payload = decode_token(refresh_payload.refresh_token)
-    if (
-        payload is None
-        or payload.get("type") != "refresh"
-        or payload.get("sub") is None
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token de refresh inválido",
-        )
-
-    user = get_active_user_by_id(db, int(payload["sub"]), unauthorized_on_missing=True)
+    user_id = _extract_refresh_user_id(refresh_payload.refresh_token)
+    user = get_active_user_by_id(db, user_id, unauthorized_on_missing=True)
     return _build_token_pair(user)
 
 

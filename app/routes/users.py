@@ -71,6 +71,33 @@ def _update_user_email(db: Session, user: User, new_email: str) -> None:
     user.email = new_email
 
 
+def _apply_profile_changes(
+    db: Session, user: User, profile_payload: UserProfileUpdate
+) -> None:
+    """Aplica los cambios opcionales de email y nombre completo sobre el usuario."""
+    if profile_payload.email is not None:
+        _update_user_email(db, user, profile_payload.email)
+    if profile_payload.full_name is not None:
+        user.full_name = profile_payload.full_name
+
+
+def _validate_password_change(
+    user: User, password_payload: UserPasswordChange | None
+) -> UserPasswordChange:
+    """Valida que el payload exista y que la contraseña actual coincida."""
+    if password_payload is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Datos de contraseña requeridos",
+        )
+    if not user.verify_password(password_payload.old_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Contraseña actual incorrecta",
+        )
+    return password_payload
+
+
 @router.get("/", response_model=list[UserOut], summary="Listar todos los usuarios")
 def list_users(db: Session = Depends(get_db)) -> list[dict]:
     """Obtiene el listado completo de usuarios registrados en el sistema."""
@@ -97,12 +124,7 @@ def update_my_profile(
     if profile_payload is None:
         return current_user.to_dict()
 
-    if profile_payload.email is not None:
-        _update_user_email(db, current_user, profile_payload.email)
-
-    if profile_payload.full_name is not None:
-        current_user.full_name = profile_payload.full_name
-
+    _apply_profile_changes(db, current_user, profile_payload)
     db.commit()
     db.refresh(current_user)
     return current_user.to_dict()
@@ -115,20 +137,9 @@ def change_password(
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
     """Valida la contraseña actual y actualiza el hash con la nueva contraseña."""
-    if password_payload is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Datos de contraseña requeridos",
-        )
-
-    if not current_user.verify_password(password_payload.old_password):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Contraseña actual incorrecta",
-        )
-
+    valid_payload = _validate_password_change(current_user, password_payload)
     current_user.password_hash = current_user.get_hash_password(
-        password_payload.new_password
+        valid_payload.new_password
     )
     db.commit()
     return {"message": "Contraseña actualizada exitosamente"}
