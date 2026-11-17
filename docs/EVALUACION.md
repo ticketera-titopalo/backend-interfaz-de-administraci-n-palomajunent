@@ -3,7 +3,7 @@
 
 > Documento **generado automáticamente** por la cátedra de Programación III (RepoSense + análisis de calidad + constancia). **No editar a mano**: se regenera en cada evaluación.
 > Rama evaluada: `main`. Análisis **heurístico** (regex + métricas): es una criba para orientar la revisión, **no una nota**.
-> Generado: 2026-11-16.
+> Generado: 2026-11-17.
 
 ## 1. Veredicto
 
@@ -184,11 +184,12 @@ Cada aspecto indica **qué mide**, **por qué importa** y **tu resultado**. Cuan
 | 2026-11-11 | **Sí** | frontend-interface-administracion-joacoardevol | 9 / 8 |
 | 2026-11-13 | **Sí** | frontend-interface-administracion-joacoardevol | 1 / 1 |
 
-**Fuera de clase:** 1 fecha(s) con actividad · 2 commits · 2 merges
+**Fuera de clase:** 2 fecha(s) con actividad · 4 commits · 4 merges
 
 | Fecha | Repositorios | Commits / merges |
 |---|---|--:|
-| 2026-11-15 | frontend-interface-administracion-joacoardevol, frontend_interface-client-JoacoArdevol | 2 / 2 |
+| 2026-11-15 | frontend-interface-administracion-joacoardevol, frontend_interface-client-JoacoArdevol | 2 / 0 |
+| 2026-11-16 | frontend-interface-administracion-joacoardevol, frontend_interface-client-JoacoArdevol | 2 / 4 |
 
 ### palojunent
 
