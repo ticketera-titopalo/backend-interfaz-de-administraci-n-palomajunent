@@ -236,15 +236,18 @@ Cada aspecto indica **qué mide**, **por qué importa** y **tu resultado**. Cuan
 | 2026-11-14 | backend-interfaz-de-administraci-n-palomajunent | 2 / 3 |
 | 2026-11-15 | backend-interfaz-de-administraci-n-palomajunent | 0 / 3 |
 
-## 7. Anexo: dónde mirar
+## 7. Anexo: archivos donde se originan los problemas
 
-Archivos donde el análisis encontró cada señal en rojo (sin número de línea, a propósito):
+Se listan los archivos y líneas que el análisis marca para cada criterio en rojo. Para **duplicación** se muestran los archivos con más líneas repetidas; para **cobertura**, las unidades por debajo del umbral.
 
-**Acoplamiento alto (Acop)** — 3 archivo(s):
-- `app/models/purchase.py`
-- `app/routes/concerts.py`
-- `app/routes/users.py`
+**Acoplamiento alto (Acop)** — 3 hallazgo(s) en 3 archivo(s):
+
+| Archivo | Línea(s) | Señal |
+|---|---|---|
+| `app/models/purchase.py` | 6 | clase 'Purchase' muy acoplada (CBO=8) |
+| `app/routes/concerts.py` | 20 | clase 'ConcertCreate' muy acoplada (CBO=9) |
+| `app/routes/users.py` | 33 | clase 'UserProfileUpdate' muy acoplada (CBO=9) |
 
 ---
-_Informe generado por la cátedra. Los umbrales corresponden al perfil `exigente`. Ante dudas, revisá el archivo señalado y el criterio en `CRITERIOS-CALIDAD.md`._
+_Informe generado por la cátedra. Los umbrales corresponden al perfil `exigente`. Ante dudas, revisá el archivo y la línea señalados y el criterio en `CRITERIOS-CALIDAD.md`._
 <!-- evaluacion:fin -->
