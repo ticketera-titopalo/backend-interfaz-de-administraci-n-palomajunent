@@ -3,7 +3,7 @@
 
 > Documento **generado automáticamente** por la cátedra de Programación III (RepoSense + análisis de calidad + constancia). **No editar a mano**: se regenera en cada evaluación.
 > Rama evaluada: `main`. Análisis **heurístico** (regex + métricas): es una criba para orientar la revisión, **no una nota**.
-> Generado: 2026-11-19.
+> Generado: 2026-11-20.
 
 ## 1. Veredicto
 
@@ -36,7 +36,7 @@
 
 | Alumno | Sesiones | Cumplimiento | Pausa | Recencia | IC | Nivel | Para subir de nivel |
 |---|--:|--:|--:|--:|--:|--|--|
-| palojunent | 14 | 50% | 28 d | 64% | **42** | Aprueba | Cumplimiento 50% (mín. 100%); Pausa 28 d (máx. 5 d); Recencia 64% (mín. 75%) |
+| palojunent | 14 | 49% | 28 d | 57% | **40** | No aprueba | Cumplimiento 49% (mín. 50%) |
 
 > Para aprobar el IC: **2 sesiones por semana** sostenidas, sin pausas mayores a **10 días** y con actividad en las **últimas 2 semanas**. Se excluyen merges, bots y al docente. Zona horaria UTC-3.
 
@@ -148,11 +148,11 @@ Cada aspecto indica **qué mide**, **por qué importa** y **tu resultado**. Cuan
 
 ## 6. Actividad en clase y fuera de clase
 
-> Se consideran las **28 clases** del período (miércoles y viernes, según `config/constancia.json`; feriados y semanas sin clase descontados). Para cada alumno se muestra la actividad **en cada clase** y también la actividad **fuera de los días de clase** (fines de semana u otros días). `Commits` = commits de trabajo (no-merge); `Merges` = merges de PR (también son push). Los días sin actividad dicen **sin actividad**.
+> Se consideran las **29 clases** del período (miércoles y viernes, según `config/constancia.json`; feriados y semanas sin clase descontados). Para cada alumno se muestra la actividad **en cada clase** y también la actividad **fuera de los días de clase** (fines de semana u otros días). `Commits` = commits de trabajo (no-merge); `Merges` = merges de PR (también son push). Los días sin actividad dicen **sin actividad**.
 
 ### joaquin ardevol
 
-**13/28 clases con actividad** · total del período: 32 commits · 33 merges
+**13/29 clases con actividad** · total del período: 32 commits · 33 merges
 
 | Fecha | Actividad | Repositorios | Commits / merges |
 |---|:--:|---|--:|
@@ -184,6 +184,7 @@ Cada aspecto indica **qué mide**, **por qué importa** y **tu resultado**. Cuan
 | 2026-11-11 | **Sí** | frontend-interface-administracion-joacoardevol | 9 / 8 |
 | 2026-11-13 | **Sí** | frontend-interface-administracion-joacoardevol | 1 / 1 |
 | 2026-11-18 | **Sí** | frontend_interface-client-JoacoArdevol | 2 / 4 |
+| 2026-11-20 | No | sin actividad | 0 / 0 |
 
 **Fuera de clase:** 3 fecha(s) con actividad · 5 commits · 5 merges
 
@@ -195,7 +196,7 @@ Cada aspecto indica **qué mide**, **por qué importa** y **tu resultado**. Cuan
 
 ### palojunent
 
-**15/28 clases con actividad** · total del período: 43 commits · 32 merges
+**15/29 clases con actividad** · total del período: 43 commits · 32 merges
 
 | Fecha | Actividad | Repositorios | Commits / merges |
 |---|:--:|---|--:|
@@ -227,6 +228,7 @@ Cada aspecto indica **qué mide**, **por qué importa** y **tu resultado**. Cuan
 | 2026-11-11 | **Sí** | backend-interfaz-de-administraci-n-palomajunent | 4 / 4 |
 | 2026-11-13 | **Sí** | backend-interfaz-de-administraci-n-palomajunent | 3 / 1 |
 | 2026-11-18 | No | sin actividad | 0 / 0 |
+| 2026-11-20 | No | sin actividad | 0 / 0 |
 
 **Fuera de clase:** 3 fecha(s) con actividad · 5 commits · 10 merges
 
