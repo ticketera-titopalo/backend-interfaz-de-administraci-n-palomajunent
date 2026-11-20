@@ -240,15 +240,25 @@ Cada aspecto indica **qué mide**, **por qué importa** y **tu resultado**. Cuan
 
 ## 7. Anexo: archivos donde se originan los problemas
 
-Se listan los archivos y líneas que el análisis marca para cada criterio en rojo. Para **duplicación** se muestran los archivos con más líneas repetidas; para **cobertura**, las unidades por debajo del umbral.
+Se listan **todos** los archivos y líneas que el análisis marca para cada criterio en rojo. Para **duplicación** se muestran los archivos con líneas repetidas; para **cobertura**, las unidades por debajo del umbral.
+
+**Resumen por archivo** — archivos con más hallazgos:
+
+| Archivo | Hallazgos | Peso total | Señales |
+|---|---:|---:|---|
+| `app/core/dependencies.py` | 3 | 13 | high_complexity, long_function, long_params |
+| `app/models/purchase.py` | 1 | 8 | high_coupling |
+| `app/routes/concerts.py` | 1 | 8 | high_coupling |
+| `app/routes/users.py` | 1 | 8 | high_coupling |
+| `migrations/versions/dddf3221a155_initial_migration.py` | 1 | 4 | long_function |
 
 **Acoplamiento alto (Acop)** — 3 hallazgo(s) en 3 archivo(s):
 
-| Archivo | Línea(s) | Señal |
-|---|---|---|
-| `app/models/purchase.py` | 6 | clase 'Purchase' muy acoplada (CBO=8) |
-| `app/routes/concerts.py` | 20 | clase 'ConcertCreate' muy acoplada (CBO=9) |
-| `app/routes/users.py` | 33 | clase 'UserProfileUpdate' muy acoplada (CBO=9) |
+| Archivo | Línea(s) | Señal | Detalle |
+|---|---|---|---|
+| `app/models/purchase.py` | 6 | high_coupling | clase 'Purchase' muy acoplada (CBO=8) |
+| `app/routes/concerts.py` | 20 | high_coupling | clase 'ConcertCreate' muy acoplada (CBO=9) |
+| `app/routes/users.py` | 33 | high_coupling | clase 'UserProfileUpdate' muy acoplada (CBO=9) |
 
 ---
 _Informe generado por la cátedra. Los umbrales corresponden al perfil `exigente`. Ante dudas, revisá el archivo y la línea señalados y el criterio en `CRITERIOS-CALIDAD.md`._
